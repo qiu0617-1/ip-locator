@@ -750,16 +750,49 @@
 (() => {
   'use strict';
 
-  // ↓↓↓ 自己的收集服务地址（结尾不要带斜杠）。留空 = 什么都不发送，只显示告知面板。
-  //     注意：下面是临时隧道地址，隧道重开就会变；变了要回来改这一行，再重新上传本文件。
-  window.__SHARE_API_BASE = 'https://cfba8e7466b191.lhr.life';
+  // ↓↓↓ 收集服务地址（结尾不要带斜杠）。留空 = 什么都不发送，只显示告知面板。
+  //     可以填多个：第一个不通就自动试下一个。隧道重开地址变了，只改这一处再重新上传本文件。
+  window.__SHARE_API_BASES = [
+    'https://aea4520e9f4d97e8-106-224-73-63.serveousercontent.com',
+    'https://468a3fbc3f2ae8.lhr.life'
+  ];
 
   window.__consentOpen = true;
   document.body.style.overflow = 'hidden';
 
   const $ = (id) => document.getElementById(id);
-  const apiBase = () => String(window.__SHARE_API_BASE || '').replace(/\/+$/, '');
   const hint = (text) => { const el = $('consentHint'); if (el) el.textContent = text; };
+
+  let activeBase = null;   // 这次用通的地址，撤回也发到同一个
+
+  function apiBases() {
+    const list = (window.__SHARE_API_BASES || [])
+      .map((s) => String(s || '').replace(/\/+$/, ''))
+      .filter(Boolean);
+    if (window.__SHARE_API_BASE) list.unshift(String(window.__SHARE_API_BASE).replace(/\/+$/, ''));
+    return Array.from(new Set(list));
+  }
+
+  async function postJson(path, payload) {
+    const list = activeBase ? [activeBase] : apiBases();
+    if (!list.length) throw new Error('没有配置后端地址');
+    let lastErr = null;
+    for (const base of list) {
+      try {
+        const res = await fetch(base + path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        activeBase = base;
+        return await res.json();
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr || new Error('后端没响应');
+  }
 
   function closeConsent() {
     const box = $('consent');
@@ -801,12 +834,7 @@
     bar.hidden = false;
     $('consentUndo').onclick = async () => {
       try {
-        const res = await fetch(apiBase() + '/api/withdraw', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: id })
-        });
-        const data = await res.json();
+        const data = await postJson('/api/withdraw', { id: id });
         $('consentToastText').textContent = data.ok ? '已删除，服务器上不再有这条记录' : '删除失败';
         $('consentUndo').disabled = true;
       } catch (e) {
@@ -830,21 +858,16 @@
   }
 
   async function send(consent, geo) {
-    const base = apiBase();
-    if (!base) {
-      hint('这个页面还没配置后端地址，所以什么都没有发送。把脚本里的 __SHARE_API_BASE 换成你自己的地址后就生效。');
+    if (!apiBases().length) {
+      hint('这个页面还没配置后端地址，所以什么都没有发送。');
       return;
     }
     hint('正在发送…');
     const net = await selfNet();
     try {
-      const res = await fetch(base + '/api/collect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ consent: consent, client: clientInfo(), net: net, geo: geo || null })
+      const data = await postJson('/api/collect', {
+        consent: consent, client: clientInfo(), net: net, geo: geo || null
       });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
       closeConsent();
       rememberChoice();
       if (consent === 'network+precise') resumeLocate();
