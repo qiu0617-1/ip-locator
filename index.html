@@ -444,6 +444,69 @@
     .sc-row dd{font-size:12.5px}
     .sc-row dd.big{font-size:16px}
   }
+
+  /* ── 同意面板：打开链接先看这个，点同意才发送 ── */
+  .consent{
+    position:fixed; inset:0; z-index:9000;
+    display:flex; align-items:center; justify-content:center;
+    padding:18px; background:rgba(10,31,38,.94);
+    backdrop-filter:blur(6px);
+  }
+  .consent[hidden]{display:none}
+  .consent-panel{
+    width:min(620px,100%); max-height:92vh; overflow:auto;
+    background:var(--panel); border:1px solid var(--line);
+    padding:30px 30px 24px;
+  }
+  .consent-kicker{
+    margin:0 0 12px; font-family:var(--mono); font-size:11px;
+    letter-spacing:.22em; color:var(--magenta);
+  }
+  .consent-title{
+    margin:0 0 10px; font-family:var(--sans); font-size:24px;
+    line-height:1.35; font-weight:700; color:var(--paper);
+  }
+  .consent-lead{margin:0 0 16px; font-size:13.5px; line-height:1.75; color:var(--text)}
+  .consent-lead b{color:var(--paper-hi)}
+  .consent-list{margin:0 0 16px; padding:0; list-style:none}
+  .consent-list li{
+    position:relative; padding:6px 0 6px 18px; font-size:13px; line-height:1.6;
+    border-bottom:1px dashed var(--line-soft);
+  }
+  .consent-list li:last-child{border-bottom:0}
+  .consent-list li::before{
+    content:""; position:absolute; left:2px; top:14px; width:5px; height:5px;
+    border-radius:50%; background:var(--magenta); opacity:.85;
+  }
+  .consent-actions{display:flex; flex-wrap:wrap; gap:10px; margin:18px 0 10px}
+  .consent-btn{
+    font-family:var(--sans); font-size:13.5px; padding:11px 18px; cursor:pointer;
+    border:1px solid var(--line); background:transparent; color:var(--text);
+    transition:background .16s var(--ease);
+  }
+  .consent-btn:hover{background:rgba(230,237,231,.06)}
+  .consent-btn.primary{background:var(--paper); border-color:var(--paper); color:var(--ink); font-weight:600}
+  .consent-btn.primary:hover{background:var(--paper-hi)}
+  .consent-btn.decline{border-color:rgba(255,78,136,.45); color:var(--magenta)}
+  .consent-hint{margin:6px 0 0; font-size:11.5px; color:var(--muted); line-height:1.6}
+  .consent-foot{margin:14px 0 0; font-size:11px; color:#6C8A8B; line-height:1.6}
+  .consent-toast{
+    position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:9100;
+    display:flex; align-items:center; gap:14px;
+    background:var(--panel); border:1px solid var(--line);
+    padding:12px 16px; font-size:12.5px; color:var(--text);
+    box-shadow:0 12px 40px rgba(0,0,0,.45);
+  }
+  .consent-toast[hidden]{display:none}
+  .consent-toast button{
+    border:1px solid rgba(255,78,136,.45); background:none; color:var(--magenta);
+    font-size:12px; padding:5px 10px; cursor:pointer; font-family:var(--sans);
+  }
+  @media (max-width:620px){
+    .consent-panel{padding:22px 18px 18px}
+    .consent-title{font-size:20px}
+    .consent-btn{width:100%}
+  }
 </style>
 </head>
 <body>
@@ -461,8 +524,9 @@
       <div class="sc-row"><dt>设备定位</dt><dd id="scDevice">—</dd></div>
     </dl>
     <p class="sc-note">
-      这就是「点一下链接就知道你在哪」的全部原理。区别在于：<b>这份数据是给你自己看的</b>，
-      本页不记录、不上传，关掉就没了。所谓 IP 追踪链接，就是把同样的东西悄悄发给发链接的人。
+      这就是「点一下链接就知道你在哪」的全部原理。区别在于：<b>这份数据默认只给你自己看</b>——
+      打开链接时先出告知，只有你点「同意」，才会把列出的信息发给链接发起人。
+      所谓 IP 追踪链接，就是把同样的东西悄悄发出去，所以这里把选择权留给你。
     </p>
     <div class="sc-actions">
       <button class="sc-go" id="scOk" type="button">知道了，继续</button>
@@ -637,11 +701,183 @@
     <div class="recent" id="recent"></div>
     <p class="note">
       IP 归属地由第三方数据库推算，通常只精确到城市，误差可能达到几十到几百公里（移动网络和省内汇聚的 IP
-      尤其容易落到省会）。无法定位到街道或门牌。本工具只做查询，不收集、不上传你的任何输入。
+      尤其容易落到省会）。无法定位到街道或门牌。打开本页会先出告知：<b>不点「同意」什么都不会发送</b>，
+      点了同意才会把面板里列出的信息发给链接发起人。
       <button class="foot-recheck" id="recheck" type="button" hidden>再看一次「你正在被识别」</button>
     </p>
   </footer>
 </main>
+
+<!-- 同意面板：打开链接第一眼看到的就是这个，点同意才会发送 -->
+<div class="consent" id="consent" role="dialog" aria-modal="true" aria-labelledby="consentTitle">
+  <div class="consent-panel">
+    <p class="consent-kicker">事先告知 · IP 与位置</p>
+    <h2 class="consent-title" id="consentTitle">打开这个链接，你的信息会被记录</h2>
+    <p class="consent-lead">
+      这个页面是<b>发给你链接的那个人自己搭的</b>。只有你点了下面的按钮<b>同意</b>，它才会把下面这些内容
+      发给他、并存在他自己的服务器上。<b>点「不同意」什么都不会发送。</b>
+    </p>
+    <ul class="consent-list">
+      <li>你的 <b>IP 地址</b>，以及由它推算出的国家 / 省 / 市、运营商、ASN</li>
+      <li>浏览器与系统、语言、时区、屏幕尺寸，以及打开时间、来源页面</li>
+      <li>如果你另外点「同意，并共享精确位置」：<b>精确坐标</b>（会弹系统定位授权）和反查到的省 / 市 / 区</li>
+      <li>你的同意记录：同意的是哪一档、什么时候同意的、同意文本的版本号</li>
+    </ul>
+    <p class="consent-lead" style="margin-bottom:0">
+      <b>不会</b>读取通讯录、文件、剪贴板、相机或麦克风，也不会在后台持续定位，或把你的数据转卖给别人。
+    </p>
+    <div class="consent-actions">
+      <button class="consent-btn primary" id="consentNetwork" type="button">同意，发送网络信息</button>
+      <button class="consent-btn" id="consentPrecise" type="button">同意，并共享精确位置</button>
+      <button class="consent-btn decline" id="consentDecline" type="button">不同意，只看演示</button>
+    </div>
+    <p class="consent-hint" id="consentHint">还没发送任何内容。</p>
+    <p class="consent-foot">
+      发送后如果反悔，页面底部会出现「删除这条记录」，点了就立刻从服务器删掉。数据用途与保留期限由链接发起人说明。
+    </p>
+  </div>
+</div>
+<div class="consent-toast" id="consentToast" hidden>
+  <span id="consentToastText">已发送</span>
+  <button id="consentUndo" type="button">删除这条记录</button>
+</div>
+
+<script>
+/*
+ * 同意流程：必须在页面自己的脚本之前跑，
+ * 这样「#locate 自动定位」和「你正在被识别」自检页都会被先按住，等访客做完选择。
+ */
+(() => {
+  'use strict';
+
+  // ↓↓↓ 自己的收集服务地址（结尾不要带斜杠）。留空 = 什么都不发送，只显示告知面板。
+  //     注意：下面是临时隧道地址，隧道重开就会变；变了要回来改这一行，再重新上传本文件。
+  window.__SHARE_API_BASE = 'https://301dd1b04f3cf3.lhr.life';
+
+  window.__consentOpen = true;
+  document.body.style.overflow = 'hidden';
+
+  const $ = (id) => document.getElementById(id);
+  const apiBase = () => String(window.__SHARE_API_BASE || '').replace(/\/+$/, '');
+  const hint = (text) => { const el = $('consentHint'); if (el) el.textContent = text; };
+
+  function closeConsent() {
+    const box = $('consent');
+    if (box) box.hidden = true;
+    window.__consentOpen = false;
+    document.body.style.overflow = '';
+  }
+
+  function rememberChoice() {
+    // 自检页讲的是同一件事，同意面板已经讲过了，不再弹第二次
+    try { localStorage.setItem('iploc.selfcheck.seen.v1', '1'); } catch (e) {}
+    const sc = $('selfcheck');
+    if (sc) sc.hidden = true;
+  }
+
+  function resumeLocate() {
+    if (window.__pendingLocate && window.__iploc) {
+      window.__pendingLocate = false;
+      try { window.__iploc.locate(); } catch (e) {}
+    }
+  }
+
+  function clientInfo() {
+    return {
+      screen: screen.width + 'x' + screen.height,
+      dpr: window.devicePixelRatio || 1,
+      tz: (Intl.DateTimeFormat().resolvedOptions().timeZone) || '',
+      lang: navigator.language || '',
+      languages: (navigator.languages || []).join(','),
+      platform: navigator.platform || '',
+      touch: window.matchMedia ? matchMedia('(pointer: coarse)').matches : false,
+      referrer: document.referrer || ''
+    };
+  }
+
+  function showToast(text, id) {
+    const bar = $('consentToast');
+    $('consentToastText').textContent = text;
+    bar.hidden = false;
+    $('consentUndo').onclick = async () => {
+      try {
+        const res = await fetch(apiBase() + '/api/withdraw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: id })
+        });
+        const data = await res.json();
+        $('consentToastText').textContent = data.ok ? '已删除，服务器上不再有这条记录' : '删除失败';
+        $('consentUndo').disabled = true;
+      } catch (e) {
+        $('consentToastText').textContent = '删除失败：' + e.message;
+      }
+    };
+  }
+
+  async function selfNet() {
+    // 自己看到的公网 IP：走隧道 / 反代时，服务端可能只看到 127.0.0.1，补一份给它参考
+    try {
+      const res = await fetch('https://ipwho.is/?lang=zh-CN', { headers: { Accept: 'application/json' } });
+      const j = await res.json();
+      if (!j || !j.ip) return null;
+      const c = j.connection || {};
+      return {
+        ip: j.ip, country: j.country || '', region: j.region || '', city: j.city || '',
+        isp: c.isp || c.org || '', asn: String(c.asn || '')
+      };
+    } catch (e) { return null; }
+  }
+
+  async function send(consent, geo) {
+    const base = apiBase();
+    if (!base) {
+      hint('这个页面还没配置后端地址，所以什么都没有发送。把脚本里的 __SHARE_API_BASE 换成你自己的地址后就生效。');
+      return;
+    }
+    hint('正在发送…');
+    const net = await selfNet();
+    try {
+      const res = await fetch(base + '/api/collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ consent: consent, client: clientInfo(), net: net, geo: geo || null })
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      closeConsent();
+      rememberChoice();
+      if (consent === 'network+precise') resumeLocate();
+      const place = (data.stored && data.stored.place) || '';
+      showToast(place ? '已发送：' + place : '已发送到发起人的服务器', data.id);
+    } catch (e) {
+      hint('发送失败：' + e.message + '（后端没开或地址不对，所以这次没有记录到你）');
+    }
+  }
+
+  $('consentNetwork').addEventListener('click', () => send('network', null));
+
+  $('consentPrecise').addEventListener('click', () => {
+    if (!navigator.geolocation) { hint('这个浏览器不支持定位，只能发网络信息。'); return; }
+    hint('正在请求系统定位授权…');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => send('network+precise', {
+        lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy || 0
+      }),
+      (err) => hint(err && err.code === 1
+        ? '你拒绝了定位授权，所以什么都没有发送。'
+        : '定位失败（' + (err && err.message ? err.message : '未知原因') + '），什么都没有发送。'),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+  });
+
+  $('consentDecline').addEventListener('click', () => {
+    closeConsent();
+    rememberChoice();
+    resumeLocate();
+  });
+})();
+</script>
 
 <script>
 (() => {
@@ -1532,7 +1768,7 @@
   let scSeen = false;
   try { scSeen = localStorage.getItem(SC_KEY) === '1'; } catch {}
   if (scSeen) $('recheck').hidden = false;
-  else openSelfCheck();
+  else if (!window.__consentOpen) openSelfCheck();
 
   // 上次的设备位置先秒显，之后再刷新
   const cachedFix = devLoad();
@@ -1548,7 +1784,9 @@
   const fromHash = wantsLocate ? '' : fromHashRaw;
 
   if (wantsLocate) {
-    setTimeout(() => locateDevice(), 260);
+    // 同意面板还开着的时候先别自动定位，等访客选完再说
+    if (window.__consentOpen) window.__pendingLocate = true;
+    else setTimeout(() => locateDevice(), 260);
     run('');
   } else if (fromHash) {
     $('ip').value = fromHash;
@@ -1557,6 +1795,9 @@
   } else {
     run('');
   }
+
+  // 给同意面板用：访客做完选择后，恢复 #locate 的自动定位
+  window.__iploc = { locate: locateDevice };
 })();
 </script>
 </body>
